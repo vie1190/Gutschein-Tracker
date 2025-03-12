@@ -34,23 +34,65 @@ app.post('/webhook', async (req, res) => {
 
   try {
     let couponCode = '';
-    let productName = '';
     let usageCount = 1;
 
-    // Daten basierend auf Webhook-Typ extrahieren
     if (topic === 'orders/create') {
       couponCode = data.discount_codes && data.discount_codes.length > 0 ? data.discount_codes[0].code : 'Kein Code';
-      productName = data.line_items && data.line_items.length > 0 ? data.line_items[0].title : 'Kein Produkt';
-    } else if (topic === 'products/create') {
-      productName = data.title || 'Kein Titel verfügbar';
-      couponCode = 'N/A';
-    } else if (topic === 'products/delete') {
-      productName = data.title || 'Gelöschtes Produkt';
-      couponCode = 'N/A';
-    }
+      const lineItems = data.line_items || [];
 
-    if (!excludedCodes.includes(couponCode)) {
-      // Bestehende Daten aus Google Sheets abrufen
+      // Für jedes Produkt in der Bestellung
+      for (const item of lineItems) {
+        const productName = item.title || 'Kein Produkt';
+
+        if (!excludedCodes.includes(couponCode)) {
+          // Bestehende Daten aus Google Sheets abrufen
+          const response = await sheets.spreadsheets.values.get({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${SHEET_NAME}!A:D`,
+          });
+          const rows = response.data.values || [];
+          let found = false;
+          let rowIndex = -1;
+
+          // Suche nach Gutscheincode UND Produktname
+          for (let i = 1; i < rows.length; i++) {
+            if (rows[i][0] === couponCode && rows[i][1] === productName) {
+              found = true;
+              rowIndex = i + 1;
+              break;
+            }
+          }
+
+          if (found) {
+            // Aktualisiere die Gesamteinlösungen
+            const currentCount = parseInt(rows[rowIndex - 1][2]) || 0;
+            usageCount = currentCount + 1;
+            await sheets.spreadsheets.values.update({
+              spreadsheetId: SPREADSHEET_ID,
+              range: `${SHEET_NAME}!C${rowIndex}`,
+              valueInputOption: 'RAW',
+              resource: { values: [[usageCount]] },
+            });
+            console.log('Einlösungen aktualisiert:', { couponCode, productName, usageCount });
+          } else {
+            // Füge eine neue Zeile hinzu
+            await sheets.spreadsheets.values.append({
+              spreadsheetId: SPREADSHEET_ID,
+              range: `${SHEET_NAME}!A2`,
+              valueInputOption: 'RAW',
+              insertDataOption: 'INSERT_ROWS',
+              resource: { values: [[couponCode, productName, usageCount, new Date().toISOString()]] },
+            });
+            console.log('Neue Daten geschrieben:', { couponCode, productName, usageCount });
+          }
+        } else {
+          console.log('Gutscheincode ausgeschlossen:', couponCode);
+        }
+      }
+    } else if (topic === 'products/create') {
+      couponCode = 'N/A';
+      const productName = data.title || 'Kein Titel verfügbar';
+
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
         range: `${SHEET_NAME}!A:D`,
@@ -59,7 +101,6 @@ app.post('/webhook', async (req, res) => {
       let found = false;
       let rowIndex = -1;
 
-      // Suche nach einem Eintrag mit gleichem Gutscheincode UND Produktnamen
       for (let i = 1; i < rows.length; i++) {
         if (rows[i][0] === couponCode && rows[i][1] === productName) {
           found = true;
@@ -69,7 +110,6 @@ app.post('/webhook', async (req, res) => {
       }
 
       if (found) {
-        // Aktualisiere die Einlösungszahl in Spalte C
         const currentCount = parseInt(rows[rowIndex - 1][2]) || 0;
         usageCount = currentCount + 1;
         await sheets.spreadsheets.values.update({
@@ -80,7 +120,6 @@ app.post('/webhook', async (req, res) => {
         });
         console.log('Einlösungen aktualisiert:', { couponCode, productName, usageCount });
       } else {
-        // Füge eine neue Zeile hinzu
         await sheets.spreadsheets.values.append({
           spreadsheetId: SPREADSHEET_ID,
           range: `${SHEET_NAME}!A2`,
@@ -90,9 +129,48 @@ app.post('/webhook', async (req, res) => {
         });
         console.log('Neue Daten geschrieben:', { couponCode, productName, usageCount });
       }
-    } else {
-      console.log('Gutscheincode ausgeschlossen:', couponCode);
+    } else if (topic === 'products/delete') {
+      couponCode = 'N/A';
+      const productName = data.title || 'Gelöschtes Produkt';
+
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!A:D`,
+      });
+      const rows = response.data.values || [];
+      let found = false;
+      let rowIndex = -1;
+
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i][0] === couponCode && rows[i][1] === productName) {
+          found = true;
+          rowIndex = i + 1;
+          break;
+        }
+      }
+
+      if (found) {
+        const currentCount = parseInt(rows[rowIndex - 1][2]) || 0;
+        usageCount = currentCount + 1;
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${SHEET_NAME}!C${rowIndex}`,
+          valueInputOption: 'RAW',
+          resource: { values: [[usageCount]] },
+        });
+        console.log('Einlösungen aktualisiert:', { couponCode, productName, usageCount });
+      } else {
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${SHEET_NAME}!A2`,
+          valueInputOption: 'RAW',
+          insertDataOption: 'INSERT_ROWS',
+          resource: { values: [[couponCode, productName, usageCount, new Date().toISOString()]] },
+        });
+        console.log('Neue Daten geschrieben:', { couponCode, productName, usageCount });
+      }
     }
+
     res.sendStatus(200);
   } catch (error) {
     console.error('Fehler beim Schreiben in Google Sheets:', error);
