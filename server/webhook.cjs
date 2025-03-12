@@ -37,7 +37,16 @@ app.post('/webhook', async (req, res) => {
     let usageCount = 1;
 
     if (topic === 'orders/create') {
-      couponCode = data.discount_codes && data.discount_codes.length > 0 ? data.discount_codes[0].code : 'Kein Code';
+      // Gutschein-Code aus discount_codes oder discount_applications extrahieren
+      if (data.discount_codes && data.discount_codes.length > 0) {
+        couponCode = data.discount_codes[0].code;
+      } else if (data.discount_applications && data.discount_applications.length > 0) {
+        const discountApp = data.discount_applications.find(app => app.type === 'discount_code');
+        couponCode = discountApp ? discountApp.code : 'Kein Code';
+      } else {
+        couponCode = 'Kein Code';
+      }
+
       const lineItems = data.line_items || [];
 
       // Für jedes Produkt in der Bestellung
@@ -64,7 +73,6 @@ app.post('/webhook', async (req, res) => {
           }
 
           if (found) {
-            // Aktualisiere die Gesamteinlösungen
             const currentCount = parseInt(rows[rowIndex - 1][2]) || 0;
             usageCount = currentCount + 1;
             await sheets.spreadsheets.values.update({
@@ -75,7 +83,6 @@ app.post('/webhook', async (req, res) => {
             });
             console.log('Einlösungen aktualisiert:', { couponCode, productName, usageCount });
           } else {
-            // Füge eine neue Zeile hinzu
             await sheets.spreadsheets.values.append({
               spreadsheetId: SPREADSHEET_ID,
               range: `${SHEET_NAME}!A2`,
