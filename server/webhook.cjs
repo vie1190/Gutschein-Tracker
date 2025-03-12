@@ -59,9 +59,9 @@ app.post('/webhook', async (req, res) => {
       let found = false;
       let rowIndex = -1;
 
-      // Suche nach dem Gutscheincode in der ersten Spalte (A)
+      // Suche nach einem Eintrag mit gleichem Gutscheincode UND Produktnamen
       for (let i = 1; i < rows.length; i++) {
-        if (rows[i][0] === couponCode) {
+        if (rows[i][0] === couponCode && rows[i][1] === productName) {
           found = true;
           rowIndex = i + 1;
           break;
@@ -78,7 +78,7 @@ app.post('/webhook', async (req, res) => {
           valueInputOption: 'RAW',
           resource: { values: [[usageCount]] },
         });
-        console.log('Einlösungen aktualisiert:', { couponCode, usageCount });
+        console.log('Einlösungen aktualisiert:', { couponCode, productName, usageCount });
       } else {
         // Füge eine neue Zeile hinzu
         await sheets.spreadsheets.values.append({
