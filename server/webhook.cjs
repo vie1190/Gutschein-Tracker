@@ -3,17 +3,9 @@ const app = express();
 app.use(express.json());
 
 app.post('/webhook', (req, res) => {
-  const topic = req.headers['x-shopify-topic'];
-  const data = req.body;
-  const webhookUrl = 'https://script.google.com/macros/s/AKfycbw7Yc8d67b2pe3w2Ysd8BkYj-ECZOlC6or46W4tqUuFYAjAr5fjf1OeevkpRzKUAA0FAw/exec';
-
-  fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ topic, data }),
-  })
-    .then(() => res.sendStatus(200))
-    .catch(() => res.sendStatus(500));
+  console.log('Received webhook:', req.headers['x-shopify-topic'], req.body);
+  // Hier kannst du später die Logik hinzufügen, z. B. Daten an Google Sheets senden
+  res.sendStatus(200);
 });
 
 const PORT = process.env.PORT || 3000;
