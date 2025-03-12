@@ -37,14 +37,15 @@ app.post('/webhook', async (req, res) => {
     let productName = '';
     let usageCount = 1;
 
+    // Daten basierend auf Webhook-Typ extrahieren
     if (topic === 'orders/create') {
       couponCode = data.discount_codes && data.discount_codes.length > 0 ? data.discount_codes[0].code : 'Kein Code';
       productName = data.line_items && data.line_items.length > 0 ? data.line_items[0].title : 'Kein Produkt';
     } else if (topic === 'products/create') {
-      productName = data.title || 'Kein Titel';
+      productName = data.title || 'Kein Titel verfügbar';
       couponCode = 'N/A';
     } else if (topic === 'products/delete') {
-      productName = data.title || 'Kein Titel';
+      productName = data.title || 'Gelöschtes Produkt';
       couponCode = 'N/A';
     }
 
@@ -59,25 +60,23 @@ app.post('/webhook', async (req, res) => {
       let rowIndex = -1;
 
       // Suche nach dem Gutscheincode in der ersten Spalte (A)
-      for (let i = 1; i < rows.length; i++) { // Überspringe die Header-Zeile
+      for (let i = 1; i < rows.length; i++) {
         if (rows[i][0] === couponCode) {
           found = true;
-          rowIndex = i + 1; // Zeilenindex für Google Sheets (beginnt bei 1)
+          rowIndex = i + 1;
           break;
         }
       }
 
       if (found) {
         // Aktualisiere die Einlösungszahl in Spalte C
-        const currentCount = parseInt(rows[rowIndex - 1][2]) || 0; // Spalte C (UsageCount)
+        const currentCount = parseInt(rows[rowIndex - 1][2]) || 0;
         usageCount = currentCount + 1;
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!C${rowIndex}`, // Spalte C der entsprechenden Zeile
+          range: `${SHEET_NAME}!C${rowIndex}`,
           valueInputOption: 'RAW',
-          resource: {
-            values: [[usageCount]],
-          },
+          resource: { values: [[usageCount]] },
         });
         console.log('Einlösungen aktualisiert:', { couponCode, usageCount });
       } else {
@@ -87,9 +86,7 @@ app.post('/webhook', async (req, res) => {
           range: `${SHEET_NAME}!A2`,
           valueInputOption: 'RAW',
           insertDataOption: 'INSERT_ROWS',
-          resource: {
-            values: [[couponCode, productName, usageCount, new Date().toISOString()]],
-          },
+          resource: { values: [[couponCode, productName, usageCount, new Date().toISOString()]] },
         });
         console.log('Neue Daten geschrieben:', { couponCode, productName, usageCount });
       }
@@ -103,5 +100,5 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`Server läuft auf Port ${PORT}`));
