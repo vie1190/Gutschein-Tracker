@@ -15,7 +15,7 @@ if (process.env.GOOGLE_SERVICE_ACCOUNT) {
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 } else {
-  const SERVICE_ACCOUNT_FILE = '/Users/alex/Alex/01.LA VIESTA/Coding Nicht Löschen/service-account.json';
+  const SERVICE_ACCOUNT_FILE = '/Users/deinname/Pfad/zur/service-account.json';
   auth = new google.auth.GoogleAuth({
     keyFile: SERVICE_ACCOUNT_FILE,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
