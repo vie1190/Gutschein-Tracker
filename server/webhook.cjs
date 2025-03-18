@@ -26,6 +26,9 @@ const sheets = google.sheets({ version: 'v4', auth });
 // Ausschlussliste für den Gutschein-Tracker
 const excludedCodes = ['TEST123'];
 
+// Cache für verarbeitete Bestell-IDs (verhindert doppelte Verarbeitung)
+const processedOrderIds = new Set();
+
 app.post('/webhook', async (req, res) => {
   console.log('Gutschein-Tracker Webhook empfangen:', req.headers['x-shopify-topic'], req.body);
   
@@ -53,6 +56,13 @@ app.post('/webhook', async (req, res) => {
         console.log('Gutschein-Tracker: Neuer Gutschein-Code hinzugefügt:', couponCode);
       }
     } else if (topic === 'orders/create') {
+      const orderId = data.id;
+      if (processedOrderIds.has(orderId)) {
+        console.log('Gutschein-Tracker: Bestellung bereits verarbeitet:', orderId);
+        return res.sendStatus(200);
+      }
+      processedOrderIds.add(orderId);
+
       let couponCode = data.discount_codes && data.discount_codes.length > 0 ? data.discount_codes[0].code : null;
       if (!couponCode || excludedCodes.includes(couponCode)) {
         console.log('Gutschein-Tracker: Kein Gutschein-Code oder ausgeschlossen:', couponCode);
@@ -85,6 +95,7 @@ app.post('/webhook', async (req, res) => {
         // Produktname ohne Varianten bereinigen (alles nach " - " entfernen)
         const fullProductName = item.title;
         const productName = fullProductName.split(' - ')[0].trim();
+        const quantity = item.quantity || 1; // Anzahl der gekauften Produkte
 
         let productColIndex = headers.indexOf(productName);
 
@@ -101,14 +112,14 @@ app.post('/webhook', async (req, res) => {
           console.log('Gutschein-Tracker: Neues Produkt in Zeile 1 hinzugefügt:', productName);
         }
 
-        // Aktualisiere Einlösungen in der Matrix
+        // Aktualisiere Einlösungen in der Matrix basierend auf der Menge
         const cellRange = `${String.fromCharCode(65 + productColIndex)}${codeRowIndex}`;
         const currentValueResponse = await sheets.spreadsheets.values.get({
           spreadsheetId: SPREADSHEET_ID,
           range: `${SHEET_NAME}!${cellRange}`,
         });
         const currentValue = currentValueResponse.data.values ? parseInt(currentValueResponse.data.values[0][0]) || 0 : 0;
-        const newValue = currentValue + 1;
+        const newValue = currentValue + quantity; // Addiere die tatsächliche Menge
 
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
