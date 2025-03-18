@@ -6,10 +6,19 @@ app.use(express.json());
 const SPREADSHEET_ID = '1xne5MVizpQFr9Wym8bF8GEg5kTfrFuk0d_gYTkgZRMg';
 const SHEET_NAME = 'Coupon Usage';
 
-const auth = new google.auth.GoogleAuth({
-  keyFile: '/Users/alex/Alex/01.LA VIESTA/Coding Nicht Löschen/service-account.json',
-  scopes: ['https://www.googleapis.com/auth/spreadsheets']
-});
+let auth;
+if (process.env.GOOGLE_SERVICE_ACCOUNT) {
+  auth = new google.auth.GoogleAuth({
+    credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
+} else {
+  const SERVICE_ACCOUNT_FILE = '/Users/alex/Alex/01.LA VIESTA/Coding Nicht Löschen/service-account.json';
+  auth = new google.auth.GoogleAuth({
+    keyFile: SERVICE_ACCOUNT_FILE,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
+}
 const sheets = google.sheets({ version: 'v4', auth });
 
 const excludedCodes = ['TEST123'];
