@@ -3,11 +3,11 @@ const { google } = require('googleapis');
 const app = express();
 app.use(express.json());
 
-// Spreadsheet-ID und Blattname
+// Spreadsheet-ID und Blattname für den Gutschein-Tracker
 const SPREADSHEET_ID = '1xne5MVizpQFr9Wym8bF8GEg5kTfrFuk0d_gYTkgZRMg';
 const SHEET_NAME = 'Coupon Usage';
 
-// Authentifizierung für Google Sheets
+// Authentifizierung für Google Sheets im Gutschein-Tracker
 let auth;
 if (process.env.GOOGLE_SERVICE_ACCOUNT) {
   auth = new google.auth.GoogleAuth({
@@ -23,189 +23,108 @@ if (process.env.GOOGLE_SERVICE_ACCOUNT) {
 }
 const sheets = google.sheets({ version: 'v4', auth });
 
-// Ausschlussliste
+// Ausschlussliste für den Gutschein-Tracker
 const excludedCodes = ['TEST123'];
 
 app.post('/webhook', async (req, res) => {
-  console.log('Webhook empfangen:', req.headers['x-shopify-topic'], req.body);
+  console.log('Gutschein-Tracker Webhook empfangen:', req.headers['x-shopify-topic'], req.body);
   
   const topic = req.headers['x-shopify-topic'];
   const data = req.body;
 
   try {
-    let couponCode = '';
-    let usageCount = 1;
-
-    if (topic === 'orders/create') {
-      // Gutschein-Code aus discount_codes oder discount_applications extrahieren
-      if (data.discount_codes && data.discount_codes.length > 0) {
-        couponCode = data.discount_codes[0].code;
-      } else if (data.discount_applications && data.discount_applications.length > 0) {
-        const discountApp = data.discount_applications.find(app => app.type === 'discount_code');
-        couponCode = discountApp ? discountApp.code : 'Kein Code';
-      } else {
-        couponCode = 'Kein Code';
+    if (topic === 'discounts/create') {
+      const couponCode = data.title;
+      // Hole aktuelle Gutschein-Codes aus Spalte A im Gutschein-Tracker Spreadsheet
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!A:A`,
+      });
+      const rows = response.data.values || [];
+      const existingCodes = rows.map(row => row[0]).filter(code => code);
+      if (!existingCodes.includes(couponCode)) {
+        const nextRow = rows.length + 1;
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${SHEET_NAME}!A${nextRow}`,
+          valueInputOption: 'RAW',
+          resource: { values: [[couponCode]] },
+        });
+        console.log('Gutschein-Tracker: Neuer Gutschein-Code hinzugefügt:', couponCode);
+      }
+    } else if (topic === 'orders/create') {
+      let couponCode = data.discount_codes && data.discount_codes.length > 0 ? data.discount_codes[0].code : null;
+      if (!couponCode || excludedCodes.includes(couponCode)) {
+        console.log('Gutschein-Tracker: Kein Gutschein-Code oder ausgeschlossen:', couponCode);
+        return res.sendStatus(200);
       }
 
       const lineItems = data.line_items || [];
+      if (lineItems.length === 0) {
+        console.log('Gutschein-Tracker: Keine Produkte in der Bestellung');
+        return res.sendStatus(200);
+      }
 
-      // Für jedes Produkt in der Bestellung
+      // Hole aktuelle Tabelle für den Gutschein-Tracker
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!A:Z`, // Bis Spalte Z, erweiterbar
+      });
+      let rows = response.data.values || [['Gutschein-Code']];
+      if (rows.length === 1 && rows[0].length === 1) {
+        rows[0] = ['Gutschein-Code'];
+      }
+      const headers = rows[0]; // Zeile 1 mit Produktnamen
+      const codeRowIndex = rows.findIndex(row => row[0] === couponCode) + 1;
+      if (codeRowIndex === 0) {
+        console.log('Gutschein-Tracker: Gutschein-Code nicht gefunden:', couponCode);
+        return res.sendStatus(500);
+      }
+
       for (const item of lineItems) {
-        const productName = item.title || 'Kein Produkt';
+        // Produktname ohne Varianten bereinigen (alles nach " - " entfernen)
+        const fullProductName = item.title;
+        const productName = fullProductName.split(' - ')[0].trim();
 
-        if (!excludedCodes.includes(couponCode)) {
-          // Bestehende Daten aus Google Sheets abrufen
-          const response = await sheets.spreadsheets.values.get({
+        let productColIndex = headers.indexOf(productName);
+
+        // Produkt nicht in Headers? Füge es hinzu
+        if (productColIndex === -1) {
+          productColIndex = headers.length;
+          await sheets.spreadsheets.values.update({
             spreadsheetId: SPREADSHEET_ID,
-            range: `${SHEET_NAME}!A:D`,
-          });
-          const rows = response.data.values || [];
-          let found = false;
-          let rowIndex = -1;
-
-          // Suche nach Gutscheincode UND Produktname
-          for (let i = 1; i < rows.length; i++) {
-            if (rows[i][0] === couponCode && rows[i][1] === productName) {
-              found = true;
-              rowIndex = i + 1;
-              break;
-            }
-          }
-
-          if (found) {
-            const currentCount = parseInt(rows[rowIndex - 1][2]) || 0;
-            usageCount = currentCount + 1;
-            await sheets.spreadsheets.values.update({
-              spreadsheetId: SPREADSHEET_ID,
-              range: `${SHEET_NAME}!C${rowIndex}`,
-              valueInputOption: 'RAW',
-              resource: { values: [[usageCount]] },
-            });
-            console.log('Einlösungen aktualisiert:', { couponCode, productName, usageCount });
-          } else {
-            await sheets.spreadsheets.values.append({
-              spreadsheetId: SPREADSHEET_ID,
-              range: `${SHEET_NAME}!A2`,
-              valueInputOption: 'RAW',
-              insertDataOption: 'INSERT_ROWS',
-              resource: { values: [[couponCode, productName, usageCount, new Date().toISOString()]] },
-            });
-            console.log('Neue Daten geschrieben:', { couponCode, productName, usageCount });
-          }
-        } else {
-          console.log('Gutscheincode ausgeschlossen:', couponCode);
-        }
-      }
-    } else if (topic === 'products/create') {
-      couponCode = 'N/A';
-      const productName = data.title || 'Kein Titel verfügbar';
-
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${SHEET_NAME}!A:D`,
-      });
-      const rows = response.data.values || [];
-      let found = false;
-      let rowIndex = -1;
-
-      for (let i = 1; i < rows.length; i++) {
-        if (rows[i][0] === couponCode && rows[i][1] === productName) {
-          found = true;
-          rowIndex = i + 1;
-          break;
-        }
-      }
-
-      if (found) {
-        const currentCount = parseInt(rows[rowIndex - 1][2]) || 0;
-        usageCount = currentCount + 1;
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!C${rowIndex}`,
-          valueInputOption: 'RAW',
-          resource: { values: [[usageCount]] },
-        });
-        console.log('Einlösungen aktualisiert:', { couponCode, productName, usageCount });
-      } else {
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!A2`,
-          valueInputOption: 'RAW',
-          insertDataOption: 'INSERT_ROWS',
-          resource: { values: [[couponCode, productName, usageCount, new Date().toISOString()]] },
-        });
-        console.log('Neue Daten geschrieben:', { couponCode, productName, usageCount });
-      }
-    } else if (topic === 'products/delete') {
-      couponCode = 'N/A';
-      const productName = data.title || 'Gelöschtes Produkt';
-
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${SHEET_NAME}!A:D`,
-      });
-      const rows = response.data.values || [];
-      let found = false;
-      let rowIndex = -1;
-
-      for (let i = 1; i < rows.length; i++) {
-        if (rows[i][0] === couponCode && rows[i][1] === productName) {
-          found = true;
-          rowIndex = i + 1;
-          break;
-        }
-      }
-
-      if (found) {
-        const currentCount = parseInt(rows[rowIndex - 1][2]) || 0;
-        usageCount = currentCount + 1;
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!C${rowIndex}`,
-          valueInputOption: 'RAW',
-          resource: { values: [[usageCount]] },
-        });
-        console.log('Einlösungen aktualisiert:', { couponCode, productName, usageCount });
-      } else {
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!A2`,
-          valueInputOption: 'RAW',
-          insertDataOption: 'INSERT_ROWS',
-          resource: { values: [[couponCode, productName, usageCount, new Date().toISOString()]] },
-        });
-        console.log('Neue Daten geschrieben:', { couponCode, productName, usageCount });
-      }
-    } else if (topic === 'discounts/create') {
-      const couponCode = data.title; // WICHTIG: Hier wird der Code aus 'title' extrahiert
-      if (!excludedCodes.includes(couponCode)) {
-        // Prüfen, ob der Code bereits existiert
-        const response = await sheets.spreadsheets.values.get({
-          spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!A:A`,
-        });
-        const rows = response.data.values || [];
-        const existingCodes = rows.map(row => row[0]);
-        if (!existingCodes.includes(couponCode)) {
-          // Neuen Code hinzufügen
-          await sheets.spreadsheets.values.append({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${SHEET_NAME}!A2`,
+            range: `${SHEET_NAME}!${String.fromCharCode(65 + productColIndex)}1`,
             valueInputOption: 'RAW',
-            insertDataOption: 'INSERT_ROWS',
-            resource: { values: [[couponCode]] },
+            resource: { values: [[productName]] },
           });
-          console.log('Neuer Gutschein-Code hinzugefügt:', couponCode);
+          headers.push(productName);
+          console.log('Gutschein-Tracker: Neues Produkt in Zeile 1 hinzugefügt:', productName);
         }
+
+        // Aktualisiere Einlösungen in der Matrix
+        const cellRange = `${String.fromCharCode(65 + productColIndex)}${codeRowIndex}`;
+        const currentValueResponse = await sheets.spreadsheets.values.get({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${SHEET_NAME}!${cellRange}`,
+        });
+        const currentValue = currentValueResponse.data.values ? parseInt(currentValueResponse.data.values[0][0]) || 0 : 0;
+        const newValue = currentValue + 1;
+
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${SHEET_NAME}!${cellRange}`,
+          valueInputOption: 'RAW',
+          resource: { values: [[newValue]] },
+        });
+        console.log('Gutschein-Tracker: Einlösungen aktualisiert:', { couponCode, productName, newValue });
       }
     }
-
     res.sendStatus(200);
   } catch (error) {
-    console.error('Fehler beim Schreiben in Google Sheets:', error);
+    console.error('Gutschein-Tracker Fehler:', error);
     res.sendStatus(500);
   }
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`Server läuft auf Port ${PORT}`));
+app.listen(PORT, () => console.log(`Gutschein-Tracker Server läuft auf Port ${PORT}`));
