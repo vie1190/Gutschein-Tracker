@@ -3,33 +3,18 @@ const { google } = require('googleapis');
 const app = express();
 app.use(express.json());
 
-// Spreadsheet-Konfiguration
 const SPREADSHEET_ID = '1xne5MVizpQFr9Wym8bF8GEg5kTfrFuk0d_gYTkgZRMg';
 const SHEET_NAME = 'Coupon Usage';
 
-// Google Sheets Authentifizierung
-let auth;
-if (process.env.GOOGLE_SERVICE_ACCOUNT) {
-  auth = new google.auth.GoogleAuth({
-    credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-} else {
-  const SERVICE_ACCOUNT_FILE = '/Users/alex/Alex/01.LA VIESTA/Coding Nicht Löschen/service-account.json';
-  auth = new google.auth.GoogleAuth({
-    keyFile: SERVICE_ACCOUNT_FILE,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-}
+const auth = new google.auth.GoogleAuth({
+  keyFile: '/Users/alex/Alex/01.LA VIESTA/Coding Nicht Löschen/service-account.json',
+  scopes: ['https://www.googleapis.com/auth/spreadsheets']
+});
 const sheets = google.sheets({ version: 'v4', auth });
 
-// Ausschlussliste für Gutscheine
 const excludedCodes = ['TEST123'];
-
-// Cache für verarbeitete Bestellungen
 const processedOrderIds = new Set();
 
-// Funktion zum Abrufen der Tabelle
 async function getSheetData() {
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -38,7 +23,6 @@ async function getSheetData() {
   return response.data.values || [['Gutschein-Code']];
 }
 
-// Webhook-Handler
 app.post('/webhook', async (req, res) => {
   console.log('Webhook empfangen:', req.headers['x-shopify-topic'], req.body);
   const topic = req.headers['x-shopify-topic'];
@@ -46,7 +30,7 @@ app.post('/webhook', async (req, res) => {
 
   try {
     if (topic === 'discounts/create') {
-      const couponCode = data.code || data.title; // Anpassung für Shopify-Webhook-Struktur
+      const couponCode = data.code || data.title;
       if (!couponCode || excludedCodes.includes(couponCode)) {
         console.log('Gutschein ausgeschlossen oder fehlt:', couponCode);
         return res.sendStatus(200);
@@ -105,11 +89,11 @@ app.post('/webhook', async (req, res) => {
         codeRowIndex = rows.length + 1;
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!A${nextRow}`,
+          range: `${SHEET_NAME}!A${codeRowIndex}`,
           valueInputOption: 'RAW',
           resource: { values: [[couponCode]] },
         });
-        console.log('Neuer Gutschein hinzugefügt (Bestellung):', couponCode);
+        console.log('Neuer Gutschein hinzugefügt (via Bestellung):', couponCode);
       }
 
       for (const item of lineItems) {
@@ -127,7 +111,7 @@ app.post('/webhook', async (req, res) => {
             resource: { values: [[productName]] },
           });
           headers.push(productName);
-          console.log('Neues Produkt hinzugefügt (Bestellung):', productName);
+          console.log('Neues Produkt hinzugefügt (via Bestellung):', productName);
         }
 
         const cellRange = `${String.fromCharCode(65 + productColIndex)}${codeRowIndex}`;
