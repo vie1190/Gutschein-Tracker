@@ -176,6 +176,28 @@ app.post('/webhook', async (req, res) => {
         });
         console.log('Neue Daten geschrieben:', { couponCode, productName, usageCount });
       }
+    } else if (topic === 'discounts/create') {
+      const couponCode = data.code; // Annahme: der Code ist im Feld 'code'
+      if (!excludedCodes.includes(couponCode)) {
+        // Prüfen, ob der Code bereits existiert
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${SHEET_NAME}!A:A`,
+        });
+        const rows = response.data.values || [];
+        const existingCodes = rows.map(row => row[0]);
+        if (!existingCodes.includes(couponCode)) {
+          // Neuen Code hinzufügen
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `${SHEET_NAME}!A2`,
+            valueInputOption: 'RAW',
+            insertDataOption: 'INSERT_ROWS',
+            resource: { values: [[couponCode]] },
+          });
+          console.log('Neuer Gutschein-Code hinzugefügt:', couponCode);
+        }
+      }
     }
 
     res.sendStatus(200);
