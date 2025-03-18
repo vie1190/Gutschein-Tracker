@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "f98a0619066986b3a4e514164b4301d9"
-application_url = "https://probability-words-enhanced-least.trycloudflare.com"
+application_url = "https://beside-scanners-computers-islands.trycloudflare.com"
 embedded = true
 name = "GutscheinTracker"
 handle = "gutscheintracker"
@@ -27,9 +27,9 @@ scopes = "write_products"
 
 [auth]
 redirect_urls = [
-  "https://probability-words-enhanced-least.trycloudflare.com/auth/callback",
-  "https://probability-words-enhanced-least.trycloudflare.com/auth/shopify/callback",
-  "https://probability-words-enhanced-least.trycloudflare.com/api/auth/callback"
+  "https://beside-scanners-computers-islands.trycloudflare.com/auth/callback",
+  "https://beside-scanners-computers-islands.trycloudflare.com/auth/shopify/callback",
+  "https://beside-scanners-computers-islands.trycloudflare.com/api/auth/callback"
 ]
 
 [pos]

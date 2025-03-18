@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const { google } = require('googleapis');
 const app = express();
@@ -6,6 +8,7 @@ app.use(express.json());
 // Spreadsheet-Konfiguration
 const SPREADSHEET_ID = '1xne5MVizpQFr9Wym8bF8GEg5kTfrFuk0d_gYTkgZRMg';
 const SHEET_NAME = 'Coupon Usage';
+const EXCLUSIONS_SHEET = 'Exclusions';
 
 // Google Sheets Authentifizierung
 let auth;
@@ -18,19 +21,37 @@ auth = new google.auth.GoogleAuth({
 });
 const sheets = google.sheets({ version: 'v4', auth });
 
-// Ausschlussliste für Gutscheine
-const excludedCodes = ['TEST123'];
-
 // Cache für verarbeitete Bestell-IDs
 const processedOrderIds = new Set();
 
 // Funktion zum Abrufen der aktuellen Tabelle
-async function getSheetData() {
+async function getSheetData(sheetName) {
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${SHEET_NAME}!A:Z`,
+    range: `${sheetName}!A:Z`,
   });
   return response.data.values || [['Gutschein-Code']];
+}
+
+// Funktion zum Abrufen der Ausschlüsse
+async function getExclusions() {
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${EXCLUSIONS_SHEET}!A2:B`,
+  });
+  const rows = response.data.values || [];
+  const exclusions = {
+    discount: [],
+    product: [],
+  };
+  rows.forEach(row => {
+    if (row[0] === 'discount') {
+      exclusions.discount.push(row[1]);
+    } else if (row[0] === 'product') {
+      exclusions.product.push(row[1]);
+    }
+  });
+  return exclusions;
 }
 
 // Webhook-Handler
@@ -40,13 +61,15 @@ app.post('/webhook', async (req, res) => {
   const data = req.body;
 
   try {
+    const rows = await getSheetData(SHEET_NAME);
+    const exclusions = await getExclusions();
+
     if (topic === 'discounts/create') {
       const couponCode = data.code || data.title;
-      if (!couponCode || excludedCodes.includes(couponCode)) {
+      if (!couponCode || exclusions.discount.includes(couponCode)) {
         console.log('Gutschein ausgeschlossen oder fehlt:', couponCode);
         return res.sendStatus(200);
       }
-      const rows = await getSheetData();
       const existingCodes = rows.map(row => row[0]).filter(code => code);
       if (!existingCodes.includes(couponCode)) {
         const nextRow = rows.length + 1;
@@ -61,7 +84,10 @@ app.post('/webhook', async (req, res) => {
     } else if (topic === 'products/create') {
       const fullProductName = data.title || 'Unbekanntes Produkt';
       const productName = fullProductName.split(' - ')[0].trim();
-      const rows = await getSheetData();
+      if (exclusions.product.includes(productName)) {
+        console.log('Produkt ausgeschlossen:', productName);
+        return res.sendStatus(200);
+      }
       const headers = rows[0];
       if (!headers.includes(productName)) {
         const nextColIndex = headers.length;
@@ -82,7 +108,7 @@ app.post('/webhook', async (req, res) => {
       processedOrderIds.add(orderId);
 
       const couponCode = data.discount_codes?.[0]?.code || null;
-      if (!couponCode || excludedCodes.includes(couponCode)) {
+      if (!couponCode || exclusions.discount.includes(couponCode)) {
         console.log('Kein Gutschein oder ausgeschlossen:', couponCode);
         return res.sendStatus(200);
       }
@@ -93,7 +119,6 @@ app.post('/webhook', async (req, res) => {
         return res.sendStatus(200);
       }
 
-      const rows = await getSheetData();
       const headers = rows[0];
       let codeRowIndex = rows.findIndex(row => row[0] === couponCode) + 1;
       if (codeRowIndex === 0) {
@@ -111,6 +136,11 @@ app.post('/webhook', async (req, res) => {
         const fullProductName = item.title || 'Unbekanntes Produkt';
         const productName = fullProductName.split(' - ')[0].trim();
         const quantity = item.quantity || 1;
+
+        if (exclusions.product.includes(productName)) {
+          console.log('Produkt ausgeschlossen, wird nicht verarbeitet:', productName);
+          continue;
+        }
 
         let productColIndex = headers.indexOf(productName);
         if (productColIndex === -1) {
