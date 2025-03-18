@@ -1,7 +1,8 @@
 import { google } from 'googleapis';
 import fetch from 'node-fetch';
 
-const SPREADSHEET_ID = '1xne5MVizpQFr9Wym8bF8GEg5kTfrFuk0d_gYTkgZRMg'; // Ersetze mit deiner Spreadsheet-ID
+// Spreadsheet-Konfiguration
+const SPREADSHEET_ID = '1xne5MVizpQFr9Wym8bF8GEg5kTfrFuk0d_gYTkgZRMg';
 const SHEET_NAME = 'Coupon Usage';
 const auth = new google.auth.GoogleAuth({
   keyFile: '/Users/alex/Alex/01.LA VIESTA/Coding Nicht Löschen/service-account.json',
@@ -9,7 +10,8 @@ const auth = new google.auth.GoogleAuth({
 });
 const sheets = google.sheets({ version: 'v4', auth });
 
-const SHOPIFY_ACCESS_TOKEN = 'REMOVED';
+// Shopify API-Konfiguration
+const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
 const SHOPIFY_SHOP_NAME = 'laviestaevents';
 const API_VERSION = '2025-01';
 
@@ -55,6 +57,9 @@ async function fetchAllDiscountCodes() {
 
 async function importAllCodes() {
   try {
+    if (!SHOPIFY_ACCESS_TOKEN) {
+      throw new Error('Shopify Access Token fehlt. Bitte setze die Umgebungsvariable SHOPIFY_ACCESS_TOKEN.');
+    }
     const shopifyCodes = await fetchAllDiscountCodes();
     const sheetResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,

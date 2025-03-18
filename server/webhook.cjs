@@ -3,13 +3,24 @@ const { google } = require('googleapis');
 const app = express();
 app.use(express.json());
 
-// Konfiguration
-const SPREADSHEET_ID = '1xne5MVizpQFr9Wym8bF8GEg5kTfrFuk0d_gYTkgZRMg'; // Ersetze mit deiner Spreadsheet-ID
+// Spreadsheet-Konfiguration
+const SPREADSHEET_ID = '1xne5MVizpQFr9Wym8bF8GEg5kTfrFuk0d_gYTkgZRMg';
 const SHEET_NAME = 'Coupon Usage';
-const auth = new google.auth.GoogleAuth({
-  keyFile: '/Users/alex/Alex/01.LA VIESTA/Coding Nicht Löschen/service-account.json',
-  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-});
+
+// Google Sheets Authentifizierung
+let auth;
+if (process.env.GOOGLE_SERVICE_ACCOUNT) {
+  auth = new google.auth.GoogleAuth({
+    credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
+} else {
+  const SERVICE_ACCOUNT_FILE = '/Users/alex/Alex/01.LA VIESTA/Coding Nicht Löschen/service-account.json';
+  auth = new google.auth.GoogleAuth({
+    keyFile: SERVICE_ACCOUNT_FILE,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
+}
 const sheets = google.sheets({ version: 'v4', auth });
 
 // Ausschlussliste für Gutscheine
@@ -35,9 +46,9 @@ app.post('/webhook', async (req, res) => {
 
   try {
     if (topic === 'discounts/create') {
-      const couponCode = data.title;
+      const couponCode = data.code;
       if (!couponCode || excludedCodes.includes(couponCode)) {
-        console.log('Gutschein ausgeschlossen:', couponCode);
+        console.log('Gutschein ausgeschlossen oder fehlt:', couponCode);
         return res.sendStatus(200);
       }
       const rows = await getSheetData();
