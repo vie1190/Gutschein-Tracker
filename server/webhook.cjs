@@ -46,7 +46,7 @@ app.post('/webhook', async (req, res) => {
 
   try {
     if (topic === 'discounts/create') {
-      const couponCode = data.code;
+      const couponCode = data.code || data.title; // Anpassung für Shopify-Webhook-Struktur
       if (!couponCode || excludedCodes.includes(couponCode)) {
         console.log('Gutschein ausgeschlossen oder fehlt:', couponCode);
         return res.sendStatus(200);

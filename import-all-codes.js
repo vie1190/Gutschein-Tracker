@@ -4,14 +4,16 @@ import fetch from 'node-fetch';
 // Spreadsheet-Konfiguration
 const SPREADSHEET_ID = '1xne5MVizpQFr9Wym8bF8GEg5kTfrFuk0d_gYTkgZRMg';
 const SHEET_NAME = 'Coupon Usage';
+
+// Google Sheets Authentifizierung
 const auth = new google.auth.GoogleAuth({
   keyFile: '/Users/alex/Alex/01.LA VIESTA/Coding Nicht Löschen/service-account.json',
-  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  scopes: ['https://www.googleapis.com/auth/spreadsheets']
 });
 const sheets = google.sheets({ version: 'v4', auth });
 
 // Shopify API-Konfiguration
-const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
+const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN; // Umgebungsvariable für Sicherheit
 const SHOPIFY_SHOP_NAME = 'laviestaevents';
 const API_VERSION = '2025-01';
 
