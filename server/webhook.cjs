@@ -105,7 +105,7 @@ app.post('/webhook', async (req, res) => {
         codeRowIndex = rows.length + 1;
         await sheets.spreadsheets.values.update({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!A${codeRowIndex}`,
+          range: `${SHEET_NAME}!A${nextRow}`,
           valueInputOption: 'RAW',
           resource: { values: [[couponCode]] },
         });

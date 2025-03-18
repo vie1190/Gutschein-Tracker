@@ -13,7 +13,7 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: 'v4', auth });
 
 // Shopify API-Konfiguration
-const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN; // Umgebungsvariable für Sicherheit
+const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
 const SHOPIFY_SHOP_NAME = 'laviestaevents';
 const API_VERSION = '2025-01';
 
