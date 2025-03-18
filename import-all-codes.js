@@ -17,8 +17,8 @@ const SHOPIFY_SHOP_NAME = 'laviestaevents';
 
 async function importAllCodes() {
   try {
-    // Hole alle Gutschein-Codes von Shopify mit Authorization-Header
-    const url = `https://${SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2023-10/discount_codes.json`;
+    // Hole alle Gutschein-Codes von Shopify
+    const url = `https://${SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2025-01/discount_codes.json`;
     const authHeader = 'Basic ' + Buffer.from(`${SHOPIFY_API_KEY}:${SHOPIFY_PASSWORD}`).toString('base64');
     const response = await fetch(url, {
       method: 'GET',
@@ -27,10 +27,20 @@ async function importAllCodes() {
         'Content-Type': 'application/json',
       },
     });
-    const data = await response.json();
-    const shopifyCodes = data.discount_codes.map(dc => dc.code);
 
-    // Hole aktuelle Codes aus Spreadsheet
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Shopify API Fehler: ${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('Shopify API Antwort:', data);
+
+    if (!data.discount_codes || !Array.isArray(data.discount_codes)) {
+      throw new Error('Keine gültigen Gutschein-Codes in der Antwort');
+    }
+
+    const shopifyCodes = data.discount_codes.map(dc => dc.code);
     const sheetResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `${SHEET_NAME}!A:A`,
@@ -38,7 +48,6 @@ async function importAllCodes() {
     const rows = sheetResponse.data.values || [];
     const existingCodes = rows.map(row => row[0]).filter(code => code);
 
-    // Filtere neue Codes
     const newCodes = shopifyCodes.filter(code => !existingCodes.includes(code)).map(code => [code]);
     if (newCodes.length > 0) {
       const nextRow = rows.length + 1;
@@ -49,12 +58,12 @@ async function importAllCodes() {
         insertDataOption: 'INSERT_ROWS',
         resource: { values: newCodes },
       });
-      console.log('Gutschein-Tracker: Alle Codes importiert:', newCodes.length);
+      console.log('Neue Codes importiert:', newCodes.length);
     } else {
-      console.log('Gutschein-Tracker: Keine neuen Codes zum Importieren');
+      console.log('Keine neuen Codes zum Importieren');
     }
   } catch (error) {
-    console.error('Gutschein-Tracker Import Fehler:', error);
+    console.error('Import Fehler:', error);
   }
 }
 
