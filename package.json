@@ -35,7 +35,7 @@
     "@shopify/shopify-app-remix": "^3.7.0",
     "@shopify/shopify-app-session-storage-prisma": "^6.0.0",
     "express": "^4.21.2",
-    "googleapis": "^140.0.0",
+    "googleapis": "^140.0.1",
     "isbot": "^5.1.0",
     "node-fetch": "^3.3.2",
     "prisma": "^6.2.1",
