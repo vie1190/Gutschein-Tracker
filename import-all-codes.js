@@ -12,13 +12,16 @@ const sheets = google.sheets({ version: 'v4', auth });
 
 // Shopify API-Konfiguration
 const SHOPIFY_API_KEY = 'cfa18dd3ca842e03e3d45aa23c5671c5';
-const SHOPIFY_PASSWORD = 'Goggy2005!?'; // Dein Shopify-Passwort
+const SHOPIFY_PASSWORD = 'Goggy2005!?';
 const SHOPIFY_SHOP_NAME = 'laviestaevents';
 
 async function importAllCodes() {
   try {
-    // Hole alle Gutschein-Codes von Shopify
-    const response = await fetch(`https://${SHOPIFY_API_KEY}:${SHOPIFY_PASSWORD}@${SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2023-10/discount_codes.json`, {
+    // Hole alle Gutschein-Codes von Shopify mit korrekt kodierter URL
+    const encodedApiKey = encodeURIComponent(SHOPIFY_API_KEY);
+    const encodedPassword = encodeURIComponent(SHOPIFY_PASSWORD);
+    const url = `https://${encodedApiKey}:${encodedPassword}@${SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2023-10/discount_codes.json`;
+    const response = await fetch(url, {
       method: 'GET',
     });
     const data = await response.json();
