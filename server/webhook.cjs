@@ -15,7 +15,7 @@ if (process.env.GOOGLE_SERVICE_ACCOUNT) {
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 } else {
-  const SERVICE_ACCOUNT_FILE = '/Users/deinname/Pfad/zur/service-account.json';
+  const SERVICE_ACCOUNT_FILE = '/Users/alex/Alex/01.LA VIESTA/Coding Nicht Löschen/service-account.json';
   auth = new google.auth.GoogleAuth({
     keyFile: SERVICE_ACCOUNT_FILE,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
@@ -177,7 +177,7 @@ app.post('/webhook', async (req, res) => {
         console.log('Neue Daten geschrieben:', { couponCode, productName, usageCount });
       }
     } else if (topic === 'discounts/create') {
-      const couponCode = data.code; // Annahme: der Code ist im Feld 'code'
+      const couponCode = data.title; // WICHTIG: Hier wird der Code aus 'title' extrahiert
       if (!excludedCodes.includes(couponCode)) {
         // Prüfen, ob der Code bereits existiert
         const response = await sheets.spreadsheets.values.get({
