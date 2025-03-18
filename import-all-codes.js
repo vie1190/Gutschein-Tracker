@@ -11,37 +11,57 @@ const auth = new google.auth.GoogleAuth({
 const sheets = google.sheets({ version: 'v4', auth });
 
 // Shopify API-Konfiguration
-const SHOPIFY_API_KEY = 'cfa18dd3ca842e03e3d45aa23c5671c5';
-const SHOPIFY_PASSWORD = 'Goggy2005!?';
+const SHOPIFY_ACCESS_TOKEN = 'REMOVED';
 const SHOPIFY_SHOP_NAME = 'laviestaevents';
 
-async function importAllCodes() {
-  try {
-    // Hole alle Gutschein-Codes von Shopify mit Authorization-Header
-    const url = `https://${SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2025-01/discount_codes.json`;
-    const authHeader = 'Basic ' + Buffer.from(`${SHOPIFY_API_KEY}:${SHOPIFY_PASSWORD}`).toString('base64');
-    const response = await fetch(url, {
+async function fetchAllDiscountCodes() {
+  const priceRulesUrl = `https://${SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2025-01/price_rules.json`;
+  const priceRulesResponse = await fetch(priceRulesUrl, {
+    method: 'GET',
+    headers: {
+      'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!priceRulesResponse.ok) {
+    const errorText = await priceRulesResponse.text();
+    throw new Error(`Fehler beim Abrufen der Price Rules: ${priceRulesResponse.status} ${errorText}`);
+  }
+
+  const priceRulesData = await priceRulesResponse.json();
+  const priceRules = priceRulesData.price_rules;
+  console.log(`Anzahl der Price Rules: ${priceRules.length}`);
+
+  const discountCodesPromises = priceRules.map(async (priceRule) => {
+    const discountCodesUrl = `https://${SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2025-01/price_rules/${priceRule.id}/discount_codes.json`;
+    const discountCodesResponse = await fetch(discountCodesUrl, {
       method: 'GET',
       headers: {
-        'Authorization': authHeader,
+        'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
         'Content-Type': 'application/json',
       },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Shopify API Fehler: ${response.status} ${response.statusText} - ${errorText}`);
+    if (!discountCodesResponse.ok) {
+      const errorText = await discountCodesResponse.text();
+      console.error(`Fehler beim Abrufen der Discount Codes für Price Rule ${priceRule.id}: ${discountCodesResponse.status} ${errorText}`);
+      return [];
     }
 
-    const data = await response.json();
-    console.log('Shopify API Antwort:', data);
+    const discountCodesData = await discountCodesResponse.json();
+    return discountCodesData.discount_codes.map(dc => dc.code);
+  });
 
-    if (!data.discount_codes || !Array.isArray(data.discount_codes)) {
-      throw new Error('Keine gültigen Gutschein-Codes in der Antwort');
-    }
+  const discountCodesArrays = await Promise.all(discountCodesPromises);
+  const allDiscountCodes = discountCodesArrays.flat();
+  console.log(`Gesamtanzahl der Discount Codes: ${allDiscountCodes.length}`);
+  return allDiscountCodes;
+}
 
-    const shopifyCodes = data.discount_codes.map(dc => dc.code);
-
+async function importAllCodes() {
+  try {
+    const shopifyCodes = await fetchAllDiscountCodes();
     // Hole aktuelle Codes aus Spreadsheet
     const sheetResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
