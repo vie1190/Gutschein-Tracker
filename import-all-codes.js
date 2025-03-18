@@ -17,7 +17,7 @@ const SHOPIFY_SHOP_NAME = 'laviestaevents';
 
 async function importAllCodes() {
   try {
-    // Hole alle Gutschein-Codes von Shopify
+    // Hole alle Gutschein-Codes von Shopify mit Authorization-Header
     const url = `https://${SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2025-01/discount_codes.json`;
     const authHeader = 'Basic ' + Buffer.from(`${SHOPIFY_API_KEY}:${SHOPIFY_PASSWORD}`).toString('base64');
     const response = await fetch(url, {
@@ -41,6 +41,8 @@ async function importAllCodes() {
     }
 
     const shopifyCodes = data.discount_codes.map(dc => dc.code);
+
+    // Hole aktuelle Codes aus Spreadsheet
     const sheetResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `${SHEET_NAME}!A:A`,
