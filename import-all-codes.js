@@ -1,8 +1,7 @@
 import { google } from 'googleapis';
 import fetch from 'node-fetch';
 
-// Authentifizierung für Google Sheets
-const SPREADSHEET_ID = '1xne5MVizpQFr9Wym8bF8GEg5kTfrFuk0d_gYTkgZRMg';
+const SPREADSHEET_ID = '1xne5MVizpQFr9Wym8bF8GEg5kTfrFuk0d_gYTkgZRMg'; // Ersetze mit deiner Spreadsheet-ID
 const SHEET_NAME = 'Coupon Usage';
 const auth = new google.auth.GoogleAuth({
   keyFile: '/Users/alex/Alex/01.LA VIESTA/Coding Nicht Löschen/service-account.json',
@@ -10,12 +9,12 @@ const auth = new google.auth.GoogleAuth({
 });
 const sheets = google.sheets({ version: 'v4', auth });
 
-// Shopify API-Konfiguration
 const SHOPIFY_ACCESS_TOKEN = 'REMOVED';
 const SHOPIFY_SHOP_NAME = 'laviestaevents';
+const API_VERSION = '2025-01';
 
 async function fetchAllDiscountCodes() {
-  const priceRulesUrl = `https://${SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2025-01/price_rules.json`;
+  const priceRulesUrl = `https://${SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/${API_VERSION}/price_rules.json`;
   const priceRulesResponse = await fetch(priceRulesUrl, {
     method: 'GET',
     headers: {
@@ -25,16 +24,14 @@ async function fetchAllDiscountCodes() {
   });
 
   if (!priceRulesResponse.ok) {
-    const errorText = await priceRulesResponse.text();
-    throw new Error(`Fehler beim Abrufen der Price Rules: ${priceRulesResponse.status} ${errorText}`);
+    throw new Error(`Fehler beim Abrufen der Price Rules: ${priceRulesResponse.status} ${await priceRulesResponse.text()}`);
   }
 
   const priceRulesData = await priceRulesResponse.json();
   const priceRules = priceRulesData.price_rules;
-  console.log(`Anzahl der Price Rules: ${priceRules.length}`);
 
   const discountCodesPromises = priceRules.map(async (priceRule) => {
-    const discountCodesUrl = `https://${SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/2025-01/price_rules/${priceRule.id}/discount_codes.json`;
+    const discountCodesUrl = `https://${SHOPIFY_SHOP_NAME}.myshopify.com/admin/api/${API_VERSION}/price_rules/${priceRule.id}/discount_codes.json`;
     const discountCodesResponse = await fetch(discountCodesUrl, {
       method: 'GET',
       headers: {
@@ -44,8 +41,7 @@ async function fetchAllDiscountCodes() {
     });
 
     if (!discountCodesResponse.ok) {
-      const errorText = await discountCodesResponse.text();
-      console.error(`Fehler beim Abrufen der Discount Codes für Price Rule ${priceRule.id}: ${discountCodesResponse.status} ${errorText}`);
+      console.error(`Fehler bei Price Rule ${priceRule.id}: ${await discountCodesResponse.text()}`);
       return [];
     }
 
@@ -54,15 +50,12 @@ async function fetchAllDiscountCodes() {
   });
 
   const discountCodesArrays = await Promise.all(discountCodesPromises);
-  const allDiscountCodes = discountCodesArrays.flat();
-  console.log(`Gesamtanzahl der Discount Codes: ${allDiscountCodes.length}`);
-  return allDiscountCodes;
+  return discountCodesArrays.flat();
 }
 
 async function importAllCodes() {
   try {
     const shopifyCodes = await fetchAllDiscountCodes();
-    // Hole aktuelle Codes aus Spreadsheet
     const sheetResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `${SHEET_NAME}!A:A`,
@@ -85,7 +78,7 @@ async function importAllCodes() {
       console.log('Keine neuen Codes zum Importieren');
     }
   } catch (error) {
-    console.error('Import Fehler:', error);
+    console.error('Import-Fehler:', error);
   }
 }
 
