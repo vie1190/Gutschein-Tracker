@@ -3,27 +3,28 @@ const { google } = require('googleapis');
 const app = express();
 app.use(express.json());
 
+// Spreadsheet-Konfiguration
 const SPREADSHEET_ID = '1xne5MVizpQFr9Wym8bF8GEg5kTfrFuk0d_gYTkgZRMg';
 const SHEET_NAME = 'Coupon Usage';
 
+// Google Sheets Authentifizierung
 let auth;
-if (process.env.GOOGLE_SERVICE_ACCOUNT) {
-  auth = new google.auth.GoogleAuth({
-    credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-} else {
-  const SERVICE_ACCOUNT_FILE = '/Users/alex/Alex/01.LA VIESTA/Coding Nicht Löschen/service-account.json';
-  auth = new google.auth.GoogleAuth({
-    keyFile: SERVICE_ACCOUNT_FILE,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
+if (!process.env.GOOGLE_SERVICE_ACCOUNT) {
+  throw new Error('GOOGLE_SERVICE_ACCOUNT Umgebungsvariable fehlt!');
 }
+auth = new google.auth.GoogleAuth({
+  credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
+  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+});
 const sheets = google.sheets({ version: 'v4', auth });
 
+// Ausschlussliste für Gutscheine
 const excludedCodes = ['TEST123'];
+
+// Cache für verarbeitete Bestell-IDs
 const processedOrderIds = new Set();
 
+// Funktion zum Abrufen der aktuellen Tabelle
 async function getSheetData() {
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -32,6 +33,7 @@ async function getSheetData() {
   return response.data.values || [['Gutschein-Code']];
 }
 
+// Webhook-Handler
 app.post('/webhook', async (req, res) => {
   console.log('Webhook empfangen:', req.headers['x-shopify-topic'], req.body);
   const topic = req.headers['x-shopify-topic'];
