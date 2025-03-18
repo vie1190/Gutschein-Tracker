@@ -1,5 +1,5 @@
-const { google } = require('googleapis');
-const fetch = require('node-fetch');
+import { google } from 'googleapis';
+import fetch from 'node-fetch';
 
 // Authentifizierung für Google Sheets
 const SPREADSHEET_ID = '1xne5MVizpQFr9Wym8bF8GEg5kTfrFuk0d_gYTkgZRMg';
@@ -12,7 +12,7 @@ const sheets = google.sheets({ version: 'v4', auth });
 
 // Shopify API-Konfiguration
 const SHOPIFY_API_KEY = 'cfa18dd3ca842e03e3d45aa23c5671c5';
-const SHOPIFY_PASSWORD = 'Goggy2005!?';
+const SHOPIFY_PASSWORD = 'Goggy2005!?'; // Dein Shopify-Passwort
 const SHOPIFY_SHOP_NAME = 'laviestaevents';
 
 async function importAllCodes() {
